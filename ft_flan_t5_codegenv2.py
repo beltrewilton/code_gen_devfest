@@ -12,6 +12,7 @@ from code_gen_util import get_dls, load_resources
 
 
 device = "cuda" if torch.cuda.is_available() else "mps"
+torch.cuda.empty_cache()
 model_name = "google/flan-t5-base"
 dataset_name = "mbpp"
 
