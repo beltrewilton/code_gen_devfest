@@ -1,0 +1,15 @@
+weights/
+tokenizer/
+t5-summary*
+peft-dialog*
+outputs/
+dialogue*
+data/
+dataset/
+.jupyter/
+.ipynb*
+.vscode/
+__pycache__/
+.mypy_cache/
+*.mp3
+*.wav

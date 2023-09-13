@@ -1,0 +1,9 @@
+torch
+torchdata
+transformers
+datasets
+evaluate
+rouge_score
+loralib
+peft
+awscli

@@ -1,0 +1,12 @@
+transformers
+datasets
+peft
+accelerate
+bitsandbytes
+trl
+safetensors
+ipywidgets
+huggingface_hub
+python-dotenv
+scipy
+accelerate
