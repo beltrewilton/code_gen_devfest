@@ -94,5 +94,5 @@ def train(
 
 if __name__ == "__main__":
     t5_model, tokenizer, dataset = load_resources(dataset_name, ["train", "validation"], model_name, device, )
-    train_dataloader, eval_dataloader = get_dls(dataset=dataset, batch_size=32)
+    train_dataloader, eval_dataloader = get_dls(dataset=dataset, batch_size=16)
     train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)
