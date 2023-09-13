@@ -38,7 +38,7 @@ class MBPPDataset(Dataset):
 
     def __getitem__(self, index):
         text = self.format_task(self.ds[index]["text"], self.ds[index]["test_list"])
-        code = self.ds[index]["code"]
+        code = text + self.ds[index]["code"] + '</s>'
 
         return text, code
 
