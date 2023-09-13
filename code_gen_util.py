@@ -1,4 +1,5 @@
 import time
+import copy
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -10,10 +11,10 @@ from peft import LoraConfig, TaskType, get_peft_model
 
 
 class MBPPDataset(Dataset):
-    def __init__(self, ds, split: str = "train") -> None:
+    def __init__(self, model_name: str, dataset_name: str, split: str = "train") -> None:
         super().__init__()
-        self.ds = ds[0 if split == "train" else 1]
-        print()
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.ds = load_dataset(dataset_name, split=split)
 
     # TODO: Example programs synthesized (few-shot) by our largest model.
     def format_task(self, task, test_list):
@@ -37,10 +38,35 @@ class MBPPDataset(Dataset):
         return len(self.ds)
 
     def __getitem__(self, index):
-        text = self.format_task(self.ds[index]["text"], self.ds[index]["test_list"])
-        code = text + self.ds[index]["code"] + '</s>'
+        text = self.format_task(self.ds[index]["text"], "")
+        code = text + self.ds[index]["code"] + self.tokenizer.eos_token
 
-        return text, code
+        # TODO: ver este max_length=512, maybe 1024 can work.
+        model_inputs = self.tokenizer(text, padding="max_length", max_length=512, truncation=True, return_tensors="pt")
+        labels = self.tokenizer(code, padding="max_length", max_length=512, truncation=True, return_tensors="pt")
+        model_inputs["decoder_input_ids"] = copy.deepcopy(labels["input_ids"])
+
+        # changing labels: convert all tokens in the duplicate prefix prompt and the padding part to -100
+        eos_token_id = self.tokenizer.eos_token_id
+        for x, y in zip(model_inputs["input_ids"], labels["input_ids"]):
+            label_prefix_len = torch.where(x == eos_token_id)[0].item() if eos_token_id in x else len(x)
+            y[:label_prefix_len] = torch.tensor([-100] * label_prefix_len)
+
+            if eos_token_id in y:
+                pad_len = len(y) - torch.where(y == eos_token_id)[0][0].item() - 1
+                if pad_len > 0:
+                    y[torch.where(y == eos_token_id)[0][0].item() + 1:] = torch.tensor([-100] * pad_len)
+
+        # shift labels to the right as the decoder input and add decoder start token id
+        decoder_start_id = self.tokenizer.eos_token_id
+        for z in model_inputs["decoder_input_ids"]:
+            # z[1:] = z[:-1] # memory error alocation
+            z[0] = decoder_start_id
+
+        model_inputs["labels"] = copy.deepcopy(labels["input_ids"])
+        model_inputs["decoder_attention_mask"] = labels["attention_mask"]
+
+        return model_inputs
 
 
 def print_trainable_parameters(desc: str, model):
@@ -54,42 +80,35 @@ def print_trainable_parameters(desc: str, model):
     return f"{dash_line}\n{desc}\ntrainable model parameters:\t{trainable_model_params:,}\nall model parameters:\t\t{all_model_params:,}\npercentage of trainable model parameters: {100 * trainable_model_params / all_model_params:.2f}%\n{dash_line}\n"
 
 
-def load_resources(
-    dataset_name: str,
-    split: list,
+def load_model(
     model_name: str,
     device: str,
     inference: bool = False,
 ):
-    dataset = (
-        load_dataset(dataset_name, split=split) if dataset_name is not None else None
-    )
-
     model = AutoModelForSeq2SeqLM.from_pretrained(
         model_name, torch_dtype=torch.float32
     ).to(device)
 
+    # Fix fom pytorch forum
     model.enable_input_require_grads()
     print(print_trainable_parameters(f"Base Model: {model_name}", model))
 
     # modules_to_save : also trained but not LoRA applied.
-    if not inference:
-        lora_config = LoraConfig(
-            r=16,  # Rank
-            target_modules=["q", "v"],
-            task_type=TaskType.SEQ_2_SEQ_LM,  # FLAN-T5
-        )
-        model = get_peft_model(model, lora_config)
-        print(print_trainable_parameters(f"LoRA Model: {model_name}", model))
+    # if not inference:
+    #     lora_config = LoraConfig(
+    #         r=16,  # Rank
+    #         target_modules=["q", "v"],
+    #         task_type=TaskType.SEQ_2_SEQ_LM,  # FLAN-T5
+    #     )
+    #     model = get_peft_model(model, lora_config)
+    #     print(print_trainable_parameters(f"LoRA Model: {model_name}", model))
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    return model, tokenizer, dataset
+    return model
 
 
-def get_dls(dataset, batch_size: int):
-    train = MBPPDataset(dataset)
-    val = MBPPDataset(dataset, split="validation")
+def get_dls(model_name: str, dataset_name: str, batch_size: int):
+    train = MBPPDataset(model_name, dataset_name)
+    val = MBPPDataset(model_name, dataset_name, split="validation")
 
     train = DataLoader(dataset=train, batch_size=batch_size, shuffle=True)
     val = DataLoader(dataset=val, batch_size=1, shuffle=True)
@@ -97,7 +116,7 @@ def get_dls(dataset, batch_size: int):
     return train, val
 
 
-def get_test_dl(dataset, batch_size: int = 1):
-    test = MBPPDataset(dataset, split="test")
+def get_test_dl(dataset, model_name: str, dataset_name: str, batch_size: int):
+    test = MBPPDataset(dataset, model_name, dataset_name, split="test")
     test = DataLoader(dataset=test, batch_size=batch_size, shuffle=True)
     return test

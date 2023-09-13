@@ -9,7 +9,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-from code_gen_util import get_test_dl, load_resources
+from code_gen_util import get_test_dl, load_model
 
 
 def compare_models(task: str, base_resp: str, orig_resp: str, ft_resp: str):
@@ -32,10 +32,10 @@ source_model = "google/flan-t5-base"
 ft_model_name = "/Users/beltre.wilton/apps/code_gen_devfest/outputs/flan-t5-base-7-47.92197974522909-1694608836"
 ####
 
-orig_model, orig_tokenizer, dataset = load_resources(
+orig_model, orig_tokenizer, dataset = load_model(
     dataset_name, ["train", "test"], source_model, device, inference=True
 )
-ft_model, ft_tokenizer, _ = load_resources(
+ft_model, ft_tokenizer, _ = load_model(
     None, ["test"], ft_model_name, device, inference=True
 )
 test_dl = get_test_dl(dataset)

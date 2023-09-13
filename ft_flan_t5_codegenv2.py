@@ -8,7 +8,7 @@ from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 
 from tqdm import tqdm
 
-from code_gen_util import get_dls, load_resources
+from code_gen_util import get_dls, load_model
 
 
 device = "cuda" if torch.cuda.is_available() else "mps"
@@ -93,6 +93,6 @@ def train(
 
 
 if __name__ == "__main__":
-    t5_model, tokenizer, dataset = load_resources(dataset_name, ["train", "validation"], model_name, device, )
+    t5_model, tokenizer, dataset = load_model(dataset_name, ["train", "validation"], model_name, device, )
     train_dataloader, eval_dataloader = get_dls(dataset=dataset, batch_size=16)
     train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)

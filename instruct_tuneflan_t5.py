@@ -1,14 +1,16 @@
 import time
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from datasets import load_dataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
+from transformers.models.t5.modeling_t5 import T5LayerCrossAttention
 
 from tqdm import tqdm
 
-from code_gen_util import get_dls, load_resources
+from code_gen_util import get_dls, load_model
 
 
 device = "cuda" if torch.cuda.is_available() else "mps"
@@ -24,7 +26,7 @@ class KeepBestModel:
         self.out = "./outputs/flan-t5-base-{0}"
 
     def __call__(
-        self, current_valid_loss, epoch, model, optimizer, loss_criterion, tokenizer
+        self, current_valid_loss, epoch, model, optimizer, tokenizer
     ):
         try:
             print(
@@ -36,7 +38,7 @@ class KeepBestModel:
             print(f"\nSaving best model for epoch: {epoch + 1}\n")
 
             # LoRA weigths + base weights
-            model = model.merge_and_unload()
+            # model = model.merge_and_unload()
             suffix = f"{epoch+1}-{str(self.best_valid_loss)}-{str(int(time.time()))}"
             model.save_pretrained(save_directory=self.out.format(suffix))
             tokenizer.save_pretrained(save_directory=self.out.format(suffix))
@@ -46,16 +48,46 @@ class KeepBestModel:
             print(f"**************************************")
 
 
+def get_model_size(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    model_size = sum([np.prod(p.size()) for p in model_parameters])
+    return "{}M".format(round(model_size / 1e+6))
+
+
+def freeze_decoder_except_xattn_codegen(model):
+    print(f'Para before freezing: {model.num_parameters():,}, trainable para: {get_model_size(model)}')
+    for param in model.decoder.parameters():
+        param.requires_grad = False
+
+    # num_decoder_layers = model.decoder.config.n_layer 
+    num_decoder_layers = model.decoder.config.num_layers
+    # for i in range(num_decoder_layers):
+    for j in range(len(model.decoder.block)):
+        block = model.decoder.block[j]
+        # each_decoder_layer = model.decoder.transformer.h[i]
+        # each_decoder_layer = model.decoder.block[1]
+        # if hasattr(model.decoder.block[1].layer[1], 'crossattention'):
+        for i in range(len(block.layer)):
+            layer = block.layer[i]
+            if isinstance(layer, T5LayerCrossAttention):
+                for param in layer.parameters():
+                    param.requires_grad = True
+                layer.to(torch.float32)
+
+        # if hasattr(each_decoder_layer, 'alpha_xattn'):
+        #     each_decoder_layer.alpha_xattn.requires_grad = True
+    print(f'Para after freezing: {model.num_parameters():,}, trainable para: {get_model_size(model)}')
+
+
 
 def train(
     model: T5ForConditionalGeneration,
     train_dataloader,
     eval_dataloader,
     epochs,
-    tokenizer,
     device,
 ):
-    loss_fn = nn.CrossEntropyLoss()
+    # loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001, eps=1e-9)
     keep = KeepBestModel()
 
@@ -63,13 +95,13 @@ def train(
         model.train()
         train_loss = 0
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch+1:02d}")
-        for task, resp in batch_iterator:
-            encoding = tokenizer(task, padding="max_length", truncation=True, return_tensors="pt")
-            input_ids = encoding.input_ids.to(device)
-            attention_mask = encoding.attention_mask.to(device)
-            labels = tokenizer(resp, padding="max_length", truncation=True, return_tensors="pt").input_ids.to(device)
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            logits = outputs.logits
+        for model_inputs in batch_iterator:
+            input_ids = model_inputs["input_ids"].to(device)
+            input_ids = input_ids.view(-1, input_ids.size(-1))
+            attention_mask = model_inputs["decoder_attention_mask"].to(device).view(-1, input_ids.size(-1))
+            labels = model_inputs["labels"].to(device).view(-1, input_ids.size(-1))
+            outputs = model(input_ids=input_ids, labels=labels, attention_mask=attention_mask)
+            # logits = outputs.logits
             
             # altertative version: 
             loss_computed = outputs.loss # (yes! the same result) 
@@ -87,12 +119,13 @@ def train(
             epoch,
             model,
             optimizer,
-            loss_fn,
-            tokenizer,
+            train_dataloader.tokenizer,
         )
 
 
 if __name__ == "__main__":
-    t5_model, tokenizer, dataset = load_resources(dataset_name, ["train", "validation"], model_name, device, )
-    train_dataloader, eval_dataloader = get_dls(dataset=dataset, batch_size=16)
-    train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)
+    t5_model = load_model(model_name, device)
+    train_dataloader, eval_dataloader = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=16)
+    print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
+    freeze_decoder_except_xattn_codegen(t5_model)
+    train(t5_model, train_dataloader, eval_dataloader, 10, device)
