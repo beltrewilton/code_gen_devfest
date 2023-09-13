@@ -16,6 +16,10 @@ class MBPPDataset(Dataset):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.ds = load_dataset(dataset_name, split=split)
 
+    def get_tokenizer(self):
+        return self.tokenizer
+
+
     # TODO: Example programs synthesized (few-shot) by our largest model.
     def format_task(self, task, test_list):
         PROMPT_DICT = {
@@ -108,12 +112,13 @@ def load_model(
 
 def get_dls(model_name: str, dataset_name: str, batch_size: int):
     train = MBPPDataset(model_name, dataset_name)
+    tokenizer = train.get_tokenizer()
     val = MBPPDataset(model_name, dataset_name, split="validation")
 
     train = DataLoader(dataset=train, batch_size=batch_size, shuffle=True)
     val = DataLoader(dataset=val, batch_size=1, shuffle=True)
 
-    return train, val
+    return train, val, tokenizer
 
 
 def get_test_dl(dataset, model_name: str, dataset_name: str, batch_size: int):

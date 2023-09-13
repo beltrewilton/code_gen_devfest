@@ -85,6 +85,7 @@ def train(
     train_dataloader,
     eval_dataloader,
     epochs,
+    tokenizer,
     device,
 ):
     # loss_fn = nn.CrossEntropyLoss()
@@ -119,14 +120,14 @@ def train(
             epoch,
             model,
             optimizer,
-            train_dataloader.tokenizer,
+            tokenizer,
         )
 
 
 if __name__ == "__main__":
     t5_model = load_model(model_name, device)
-    train_dataloader, eval_dataloader = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=16)
+    train_dataloader, eval_dataloader, tokenizer = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=16)
     print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
     freeze_decoder_except_xattn_codegen(t5_model)
     print(print_trainable_parameters(f"Base Model (freeze_decoder): {model_name}", t5_model))
-    train(t5_model, train_dataloader, eval_dataloader, 10, device)
+    train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)
