@@ -10,7 +10,7 @@ from transformers.models.t5.modeling_t5 import T5LayerCrossAttention
 
 from tqdm import tqdm
 
-from code_gen_util import get_dls, load_model
+from code_gen_util import get_dls, load_model, print_trainable_parameters
 
 
 device = "cuda" if torch.cuda.is_available() else "mps"
@@ -128,4 +128,5 @@ if __name__ == "__main__":
     train_dataloader, eval_dataloader = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=16)
     print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
     freeze_decoder_except_xattn_codegen(t5_model)
+    print(print_trainable_parameters(f"Base Model (freeze_decoder): {model_name}", t5_model))
     train(t5_model, train_dataloader, eval_dataloader, 10, device)
