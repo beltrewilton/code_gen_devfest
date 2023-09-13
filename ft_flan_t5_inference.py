@@ -21,7 +21,8 @@ def compare_models(task: str, base_resp: str, orig_resp: str, ft_resp: str):
     pprint(f"(FINETUNED) MODEL CODE GENERATION - ZERO SHOT:\n{ft_resp}")
     pprint(dash_line)
     print("\n")
-
+  
+  # 407
 
 dataset_name = "mbpp"
 device = "mps"
@@ -29,45 +30,34 @@ device = "mps"
 ####
 source_model = "google/flan-t5-base"
 # load_from_checkpoint
-ft_model_name = "/Users/beltre.wilton/apps/code_gen_devfest/outputs/flan-t5-base-7-47.92197974522909-1694608836"
+ft_model_name = "/Users/beltre.wilton/Documents/devfest_docs/flan-t5-base-9-1.3386965940395992-MBPP"
 ####
 
-orig_model, orig_tokenizer, dataset = load_model(
-    dataset_name, ["train", "test"], source_model, device, inference=True
-)
-ft_model, ft_tokenizer, _ = load_model(
-    None, ["test"], ft_model_name, device, inference=True
-)
-test_dl = get_test_dl(dataset)
+orig_model = load_model(source_model, device, inference=True)
+ft_model = load_model(ft_model_name, device, inference=True)
+test_dl, _ = get_test_dl(ft_model_name, dataset_name, batch_size=3)
+orig_tokenizer = AutoTokenizer.from_pretrained(source_model)
+ft_tokenizer = AutoTokenizer.from_pretrained(ft_model_name)
 
 
 def test(orig_model, orig_tokenizer, ft_model, ft_tokenizer, test_dl, device):
-    for i, x in enumerate(test_dl):
-        task, resp = x
-        ft_model.eval()
-        orig_model.eval()
-        with torch.no_grad():
-            input_ids = ft_tokenizer(
-                task, padding="max_length", truncation=True, return_tensors="pt"
-            ).input_ids.to(device)
-            # labels = ft_tokenizer(resp, padding="max_length", truncation=True, return_tensors="pt").input_ids.to(device)
-            # outputs = model(input_ids=input_ids, labels=labels)
-            outputs = ft_model.generate(input_ids)  # max_length
-            # logits = outputs.logits
-            ft_resp = ft_tokenizer.decode(outputs[0], skip_special_tokens=True)
+    for model_inputs in test_dl:
+        for input_ids, task, resp in zip(model_inputs["input_ids"], model_inputs["instruct_text"], model_inputs["code_text"]):
+            input_ids = input_ids.to(device)
+            # # labels = model_inputs["labels"]
+            # task = model_inputs["instruct_text"]
+            # resp = model_inputs["code_text"]
 
-            input_ids = orig_tokenizer(
-                task, padding="max_length", truncation=True, return_tensors="pt"
-            ).input_ids.to(device)
-            # labels = orig_tokenizer(resp, padding="max_length", truncation=True, return_tensors="pt").input_ids.to(device)
-            outputs = orig_model.generate(input_ids)
-            orig_resp = orig_tokenizer.decode(outputs[0], skip_special_tokens=True)
+            ft_model.eval()
+            orig_model.eval()
+            with torch.no_grad():
+                outputs = ft_model.generate(input_ids)
+                ft_resp = ft_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            compare_models(task, resp, orig_resp, ft_resp)
+                outputs = orig_model.generate(input_ids)
+                orig_resp = orig_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            if i == 1:
-                print("End!")
-                break
+                compare_models(task, resp, orig_resp, ft_resp) 
 
 
 if __name__ == "__main__":

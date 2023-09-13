@@ -16,7 +16,7 @@ from code_gen_util import get_dls, load_model, print_trainable_parameters
 device = "cuda" if torch.cuda.is_available() else "mps"
 torch.cuda.empty_cache()
 model_name = "google/flan-t5-base"
-dataset_name = "mbpp"
+dataset_name = "code_x_glue_ct_code_to_text"
 
 
 ## save best model utility
@@ -126,7 +126,7 @@ def train(
 
 if __name__ == "__main__":
     t5_model = load_model(model_name, device)
-    train_dataloader, eval_dataloader, tokenizer = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=16)
+    train_dataloader, eval_dataloader, tokenizer = get_dls(model_name=model_name, dataset_name=dataset_name, batch_size=32)
     print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
     freeze_decoder_except_xattn_codegen(t5_model)
     print(print_trainable_parameters(f"Base Model (freeze_decoder): {model_name}", t5_model))

@@ -14,7 +14,7 @@ class MBPPDataset(Dataset):
     def __init__(self, model_name: str, dataset_name: str, split: str = "train") -> None:
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.ds = load_dataset(dataset_name, split=split)
+        self.ds = load_dataset(dataset_name, "python", split=split)
 
     def get_tokenizer(self):
         return self.tokenizer
@@ -42,7 +42,7 @@ class MBPPDataset(Dataset):
         return len(self.ds)
 
     def __getitem__(self, index):
-        text = self.format_task(self.ds[index]["text"], "")
+        text = self.format_task(self.ds[index]["docstring"], "")
         code = text + self.ds[index]["code"] + self.tokenizer.eos_token
 
         # TODO: ver este max_length=512, maybe 1024 can work.
@@ -69,6 +69,8 @@ class MBPPDataset(Dataset):
 
         model_inputs["labels"] = copy.deepcopy(labels["input_ids"])
         model_inputs["decoder_attention_mask"] = labels["attention_mask"]
+        model_inputs["instruct_text"] = text
+        model_inputs["code_text"] = code
 
         return model_inputs
 
@@ -121,7 +123,8 @@ def get_dls(model_name: str, dataset_name: str, batch_size: int):
     return train, val, tokenizer
 
 
-def get_test_dl(dataset, model_name: str, dataset_name: str, batch_size: int):
-    test = MBPPDataset(dataset, model_name, dataset_name, split="test")
+def get_test_dl(model_name: str, dataset_name: str, batch_size: int):
+    test = MBPPDataset(model_name, dataset_name, split="test")
+    tokenizer = test.get_tokenizer()
     test = DataLoader(dataset=test, batch_size=batch_size, shuffle=True)
-    return test
+    return test, tokenizer
