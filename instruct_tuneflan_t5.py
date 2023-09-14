@@ -26,6 +26,15 @@ dataset_name = "code_x_glue_ct_code_to_text"
 # Processing epoch 01:  25%|███▏ | 3880/15739 [1:00:43<3:05:30,  1.07it/s]
 # 7:22 PM
 
+# %cd /workspace/
+# !git clone https://github.com/beltrewilton/code_gen_devfest.git
+
+# %%capture
+# !pip install torch transformers datasets peft tqdm
+
+# %cd code_gen_devfest
+# !python instruct_tuneflan_t5.py
+
 
 ## save best model utility
 class KeepBestModel:
@@ -122,9 +131,9 @@ def train(
             optimizer.zero_grad()
             #
 
-            if i == 5:
-                print('Finish!')
-                break
+            # if i == 5:
+            #     print('Finish!')
+            #     break
 
         # each epoch chech for the best model
         keep(
@@ -142,4 +151,4 @@ if __name__ == "__main__":
     print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
     freeze_decoder_except_xattn_codegen(t5_model)
     print(print_trainable_parameters(f"Base Model (freeze_decoder): {model_name}", t5_model))
-    train(t5_model, train_dataloader, eval_dataloader, 2, tokenizer, device)
+    train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)
