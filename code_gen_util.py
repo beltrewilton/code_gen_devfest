@@ -52,14 +52,22 @@ class MBPPDataset(Dataset):
 
         # changing labels: convert all tokens in the duplicate prefix prompt and the padding part to -100
         eos_token_id = self.tokenizer.eos_token_id
+        #  File "/workspace/code_gen_devfest/code_gen_util.py", line 56, in __getitem__
+        #     label_prefix_len = torch.where(x == eos_token_id)[0].item() if eos_token_id in x else len(x)
+        # RuntimeError: a Tensor with 3 elements cannot be converted to Scalar
         for x, y in zip(model_inputs["input_ids"], labels["input_ids"]):
-            label_prefix_len = torch.where(x == eos_token_id)[0].item() if eos_token_id in x else len(x)
-            y[:label_prefix_len] = torch.tensor([-100] * label_prefix_len)
+            try:
+                label_prefix_len = torch.where(x == eos_token_id)[0].item() if eos_token_id in x else len(x)
+                y[:label_prefix_len] = torch.tensor([-100] * label_prefix_len)
 
-            if eos_token_id in y:
-                pad_len = len(y) - torch.where(y == eos_token_id)[0][0].item() - 1
-                if pad_len > 0:
-                    y[torch.where(y == eos_token_id)[0][0].item() + 1:] = torch.tensor([-100] * pad_len)
+                if eos_token_id in y:
+                    pad_len = len(y) - torch.where(y == eos_token_id)[0][0].item() - 1
+                    if pad_len > 0:
+                        y[torch.where(y == eos_token_id)[0][0].item() + 1:] = torch.tensor([-100] * pad_len)
+            except Exception as ex:
+                print("******************************************************************************")
+                print(ex)
+                print("******************************************************************************")
 
         # shift labels to the right as the decoder input and add decoder start token id
         decoder_start_id = self.tokenizer.eos_token_id

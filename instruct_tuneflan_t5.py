@@ -18,6 +18,14 @@ torch.cuda.empty_cache()
 model_name = "google/flan-t5-base"
 dataset_name = "code_x_glue_ct_code_to_text"
 
+### Balance: $15.682
+### Processing epoch 01:   5%|▊  | 838/15739 [13:07<3:52:58,  1.07it/s]
+## 6:34 PM
+
+# Balance:  $14.085
+# Processing epoch 01:  25%|███▏ | 3880/15739 [1:00:43<3:05:30,  1.07it/s]
+# 7:22 PM
+
 
 ## save best model utility
 class KeepBestModel:
@@ -96,7 +104,7 @@ def train(
         model.train()
         train_loss = 0
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch+1:02d}")
-        for model_inputs in batch_iterator:
+        for i, model_inputs in enumerate(batch_iterator):
             input_ids = model_inputs["input_ids"].to(device)
             input_ids = input_ids.view(-1, input_ids.size(-1))
             attention_mask = model_inputs["decoder_attention_mask"].to(device).view(-1, input_ids.size(-1))
@@ -114,6 +122,10 @@ def train(
             optimizer.zero_grad()
             #
 
+            if i == 5:
+                print('Finish!')
+                break
+
         # each epoch chech for the best model
         keep(
             train_loss / len(batch_iterator),
@@ -130,4 +142,4 @@ if __name__ == "__main__":
     print(f"  ==> Loaded model from {model_name}, model size {t5_model.num_parameters():,}")
     freeze_decoder_except_xattn_codegen(t5_model)
     print(print_trainable_parameters(f"Base Model (freeze_decoder): {model_name}", t5_model))
-    train(t5_model, train_dataloader, eval_dataloader, 10, tokenizer, device)
+    train(t5_model, train_dataloader, eval_dataloader, 2, tokenizer, device)
